@@ -8,13 +8,21 @@ pub async fn run_async_server(addr: &str) -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(addr).await?;
     println!("(async) Server listening on {addr}");
 
-    let (mut socket, peer) = listener.accept().await?;
-    println!("(async) Client connected: {peer:?}");
+    loop {
 
+        let (socket, peer) = listener.accept().await?;
+        println!("Client connected: {peer:?}");
+        tokio::spawn(
+            async move {
+                handle_connection(socket).await }
+        );
+    }
+}
+
+pub async fn handle_connection(mut socket: TcpStream) {
     let mut buf = vec![0u8; 1024 * 1024]; // 64 KB read buffer
     let mut total_bytes: u64 = 0;
     let mut last = tokio::time::Instant::now();
-
     loop {
         let n = match socket.read(&mut buf).await {
             Ok(0) => {
@@ -38,24 +46,21 @@ pub async fn run_async_server(addr: &str) -> Result<(), Box<dyn Error>> {
             last = tokio::time::Instant::now();
         }
     }
-
-    Ok(())
 }
-
 
 
 
 pub async fn run_async_client(
     addr: &str,
     packet_size: usize,
+    buffer_size: usize,
 ) -> Result<(), Box<dyn Error>> {
     let stream = TcpStream::connect(addr).await?;
     stream.set_nodelay(true)?;
     println!("Connected to server {addr}");
-    let batch_size = 0;
     // Wrap in BufWriter if batching is enabled
-    let mut writer: Box<dyn AsyncWrite + Unpin + Send> = if batch_size > 0 {
-        Box::new(BufWriter::with_capacity(batch_size, stream))
+    let mut writer: Box<dyn AsyncWrite + Unpin + Send> = if buffer_size > 0 {
+        Box::new(BufWriter::with_capacity(buffer_size, stream))
     } else {
         Box::new(stream)
     };
@@ -69,7 +74,7 @@ pub async fn run_async_client(
         sent_bytes += packet_size as u64;
         packet_count += 1;
         // Only flush if we're using batching
-        if batch_size > 0 && sent_bytes % (batch_size as u64) == 0 {
+        if buffer_size > 0 && sent_bytes % (buffer_size as u64) == 0 {
             writer.flush().await?;
         }
 
@@ -81,5 +86,6 @@ pub async fn run_async_client(
             last = tokio::time::Instant::now();
             packet_count = 0;
         }
+        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     }
 }
