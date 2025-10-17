@@ -86,6 +86,5 @@ pub async fn run_async_client(
             last = tokio::time::Instant::now();
             packet_count = 0;
         }
-        tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
     }
 }
