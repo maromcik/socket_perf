@@ -69,10 +69,13 @@ pub async fn run_async_client(
     let mut sent_bytes: u64 = 0;
     let mut last = tokio::time::Instant::now();
     let mut packet_count = 0_u64;
+    // let mut i = 0_u128;
     loop {
+        // let packet = i.to_string().as_bytes().to_vec();
         writer.write_all(&packet).await?;
         sent_bytes += packet_size as u64;
         packet_count += 1;
+        // i += 1;
         // Only flush if we're using batching
         if buffer_size > 0 && sent_bytes % (buffer_size as u64) == 0 {
             writer.flush().await?;
