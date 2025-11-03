@@ -7,12 +7,12 @@ use tokio::io::AsyncWriteExt;
 
 pub async fn run_async_server(addr: &str) -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(addr).await?;
-    println!("(async) Server listening on {addr}");
+    info!("(async) Server listening on {addr}");
 
     loop {
 
         let (socket, peer) = listener.accept().await?;
-        println!("Client connected: {peer:?}");
+        info!("Client connected: {peer:?}");
         tokio::spawn(
             async move {
                 handle_connection(socket).await }
