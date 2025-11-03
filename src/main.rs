@@ -15,8 +15,8 @@ struct Args {
     #[arg(short, long, default_value = "127.0.0.1:3003")]
     addr: String,
 
-    #[arg(short, long, default_value = "1500")]
-    size: usize,
+    #[arg(short = 'l', long, default_value = "1500")]
+    length: usize,
 
     #[arg(short, long, default_value = "0")]
     buffer: usize,
