@@ -28,7 +28,7 @@ struct Args {
     )]
     log_level: log::LevelFilter,
 
-    #[arg(short = 'b', long = "bind", default_value = "127.0.0.1:3003")]
+    #[arg(short = 'b', long = "bind")]
     bind: Option<String>,
 
     #[arg(short = 'c', long = "connect")]
