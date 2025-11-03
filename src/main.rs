@@ -28,10 +28,10 @@ struct Args {
     )]
     log_level: log::LevelFilter,
 
-    #[arg(short = 'b', long = "bind", action = clap::ArgAction::SetTrue)]
+    #[arg(short = 'b', long = "bind", default_value = "127.0.0.1:3003")]
     bind: Option<String>,
 
-    #[arg(short = 'c', long = "connect", action = clap::ArgAction::SetTrue)]
+    #[arg(short = 'c', long = "connect")]
     connect: Option<String>,
 
     #[arg(short = 'd', long = "changing_data", action = clap::ArgAction::SetTrue)]
