@@ -40,7 +40,7 @@ pub fn handle_connection(mut socket: TcpStream) -> Result<(), Box<dyn Error>> {
     }
 }
 
-pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize) -> Result<(), Box<dyn Error>> {
+pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, changing_data: bool) -> Result<(), Box<dyn Error>> {
     let stream = TcpStream::connect(addr)?;
     stream.set_nodelay(true)?;
     println!("(blocking) Connected to {addr}");
@@ -51,12 +51,17 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize) -
         Box::new(stream)
     };
     
-    let packet = vec![0u8; packet_size];
+    let mut packet = vec![0u8; packet_size];
 
     let mut sent_bytes: u64 = 0;
     let mut last = std::time::Instant::now();
     let mut packet_count = 0_u64;
+    let mut i = 0_u128;
     loop {
+        if changing_data {
+            packet.extend(i.to_string().as_bytes());
+            i += 1;
+        }
         writer.write_all(&packet)?;
         sent_bytes += packet_size as u64;
         packet_count += 1;
@@ -70,6 +75,10 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize) -
             sent_bytes = 0;
             last = std::time::Instant::now();
             packet_count = 0;
+        }
+
+        if changing_data {
+            packet = vec![0u8; packet_size];
         }
     }
 }

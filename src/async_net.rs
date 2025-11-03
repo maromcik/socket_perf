@@ -54,6 +54,7 @@ pub async fn run_async_client(
     addr: &str,
     packet_size: usize,
     buffer_size: usize,
+    changing_data: bool,
 ) -> Result<(), Box<dyn Error>> {
     let stream = TcpStream::connect(addr).await?;
     stream.set_nodelay(true)?;
@@ -65,17 +66,19 @@ pub async fn run_async_client(
         Box::new(stream)
     };
 
-    let packet = vec![0u8; packet_size];
+    let mut packet = vec![0u8; packet_size];
     let mut sent_bytes: u64 = 0;
     let mut last = tokio::time::Instant::now();
     let mut packet_count = 0_u64;
-    // let mut i = 0_u128;
+    let mut i = 0_u128;
     loop {
-        // let packet = i.to_string().as_bytes().to_vec();
+        if changing_data {
+            packet.extend(i.to_string().as_bytes());
+            i += 1;
+        }
         writer.write_all(&packet).await?;
-        sent_bytes += packet_size as u64;
         packet_count += 1;
-        // i += 1;
+        sent_bytes += packet_size as u64;
         // Only flush if we're using batching
         if buffer_size > 0 && sent_bytes % (buffer_size as u64) == 0 {
             writer.flush().await?;
@@ -88,6 +91,10 @@ pub async fn run_async_client(
             sent_bytes = 0;
             last = tokio::time::Instant::now();
             packet_count = 0;
+        }
+
+        if changing_data {
+            packet = vec![0u8; packet_size];
         }
     }
 }
