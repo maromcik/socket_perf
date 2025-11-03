@@ -41,13 +41,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     if args.use_async {
         match (args.server, args.client) {
-            (false, true) => run_async_client(&args.addr, args.size, args.buffer, args.changing_data).await?,
+            (false, true) => run_async_client(&args.addr, args.length, args.buffer, args.changing_data).await?,
             (true, false) => run_async_server(&args.addr).await?,
             _ => panic!("Must specify either --server or --client"),
         }
     } else {
         match (args.server, args.client) {
-          (false, true)   => run_blocking_client(&args.addr ,args.size, args.buffer, args.changing_data)?,
+          (false, true)   => run_blocking_client(&args.addr ,args.length, args.buffer, args.changing_data)?,
           (true, false)   => run_blocking_server(&args.addr)?,
             _ => panic!("Must specify either --server or --client"),
         }
