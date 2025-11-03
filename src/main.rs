@@ -19,6 +19,9 @@ struct Args {
     #[arg(short = 'f', long = "buffer", default_value = "0")]
     buffer: usize,
 
+    #[arg(short = 'p', long = "port", default_value = "3003")]
+    port: u16,
+
     #[arg(
         short = 'l',
         long,
@@ -52,16 +55,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     match (args.bind, args.connect) {
         (None, Some(connect)) => {
             if args.use_async {
-                run_async_client(&connect, args.size, args.buffer, args.changing_data).await?;
+                run_async_client(format!("{connect}:{}", args.port).as_str(), args.size, args.buffer, args.changing_data).await?;
             } else {
-                run_blocking_client(&connect, args.size, args.buffer, args.changing_data)?;
+                run_blocking_client(format!("{connect}:{}", args.port).as_str(), args.size, args.buffer, args.changing_data)?;
             }
         }
         (Some(bind), None) => {
             if args.use_async {
-                run_async_server(&bind).await?
+                run_async_server(format!("{bind}:{}", args.port).as_str()).await?
             } else {
-                run_blocking_server(&bind)?;
+                run_blocking_server(format!("{bind}:{}", args.port).as_str())?;
             }
         }
         (_, _) => warn!("Must specify either --bind (-b) or --connect (-c)"),
