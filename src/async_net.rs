@@ -1,6 +1,7 @@
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWrite, BufWriter};
 use std::error::Error;
+use log::{error, info};
 use tokio::net::TcpStream;
 use tokio::io::AsyncWriteExt;
 
@@ -26,12 +27,12 @@ pub async fn handle_connection(mut socket: TcpStream) {
     loop {
         let n = match socket.read(&mut buf).await {
             Ok(0) => {
-                println!("Connection closed by peer");
+                info!("Connection closed by peer");
                 break;
             }
             Ok(n) => n,
             Err(e) => {
-                eprintln!("Read error: {e:?}");
+                error!("Read error: {e:?}");
                 break;
             }
         };
@@ -41,7 +42,7 @@ pub async fn handle_connection(mut socket: TcpStream) {
         // print throughput every second
         if last.elapsed().as_secs_f64() >= 1.0 {
             let mbps = (total_bytes as f64 * 8.0) / 1_000_000.0;
-            println!("Received {:.2} Mbps", mbps);
+            info!("Received {:.2} Mbps", mbps);
             total_bytes = 0;
             last = tokio::time::Instant::now();
         }
@@ -58,7 +59,7 @@ pub async fn run_async_client(
 ) -> Result<(), Box<dyn Error>> {
     let stream = TcpStream::connect(addr).await?;
     stream.set_nodelay(true)?;
-    println!("Connected to server {addr}");
+    info!("Connected to server {addr}");
     // Wrap in BufWriter if batching is enabled
     let mut writer: Box<dyn AsyncWrite + Unpin + Send> = if buffer_size > 0 {
         Box::new(BufWriter::with_capacity(buffer_size, stream))
@@ -86,8 +87,8 @@ pub async fn run_async_client(
 
         if last.elapsed().as_secs_f64() >= 1.0 {
             let mbps = (sent_bytes as f64 * 8.0) / 1_000_000.0;
-            println!("(async) Sent {:.2} Mbps", mbps);
-            println!("(async) Sent {} packets", packet_count);
+            info!("(async) Sent {:.2} Mbps", mbps);
+            info!("(async) Sent {} packets", packet_count);
             sent_bytes = 0;
             last = tokio::time::Instant::now();
             packet_count = 0;

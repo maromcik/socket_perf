@@ -1,31 +1,38 @@
-use clap::{Parser, ValueEnum};
-use std::error::Error;
-use std::io::{ Write};
 use crate::async_net::{run_async_client, run_async_server};
 use crate::blocking_net::{run_blocking_client, run_blocking_server};
+use clap::{Parser, arg};
+use std::error::Error;
+use log::warn;
 
-mod blocking_net;
 mod async_net;
+mod blocking_net;
 
 #[derive(Parser, Debug)]
-#[command(name = "tcp_blast_dual", about = "Compare async vs sync TCP throughput")]
+#[command(
+    name = "tcp_blast_dual",
+    about = "Compare async vs sync TCP throughput"
+)]
 struct Args {
+    #[arg(short = 's', long, default_value = "1500")]
+    size: usize,
 
-    /// Address to bind or connect to
-    #[arg(short, long, default_value = "127.0.0.1:3003")]
-    addr: String,
-
-    #[arg(short = 'l', long, default_value = "1500")]
-    length: usize,
-
-    #[arg(short, long, default_value = "0")]
+    #[arg(short = 'f', long = "buffer", default_value = "0")]
     buffer: usize,
 
-    #[arg(short = 's', long = "server", action = clap::ArgAction::SetTrue)]
-    server: bool,
+    #[arg(
+        short = 'l',
+        long,
+        default_value = "info",
+        env = "RUST_LOG",
+        value_name = "LOG_LEVEL"
+    )]
+    log_level: log::LevelFilter,
 
-    #[arg(short = 'c', long = "client", action = clap::ArgAction::SetTrue)]
-    client: bool,
+    #[arg(short = 'b', long = "bind", action = clap::ArgAction::SetTrue)]
+    bind: Option<String>,
+
+    #[arg(short = 'c', long = "connect", action = clap::ArgAction::SetTrue)]
+    connect: Option<String>,
 
     #[arg(short = 'd', long = "changing_data", action = clap::ArgAction::SetTrue)]
     changing_data: bool,
@@ -34,23 +41,30 @@ struct Args {
     use_async: bool,
 }
 
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
 
-    if args.use_async {
-        match (args.server, args.client) {
-            (false, true) => run_async_client(&args.addr, args.length, args.buffer, args.changing_data).await?,
-            (true, false) => run_async_server(&args.addr).await?,
-            _ => panic!("Must specify either --server or --client"),
+    env_logger::Builder::new()
+        .filter(None, args.log_level)
+        .init();
+
+    match (args.bind, args.connect) {
+        (None, Some(connect)) => {
+            if args.use_async {
+                run_async_client(&connect, args.size, args.buffer, args.changing_data).await?;
+            } else {
+                run_blocking_client(&connect, args.size, args.buffer, args.changing_data)?;
+            }
         }
-    } else {
-        match (args.server, args.client) {
-          (false, true)   => run_blocking_client(&args.addr ,args.length, args.buffer, args.changing_data)?,
-          (true, false)   => run_blocking_server(&args.addr)?,
-            _ => panic!("Must specify either --server or --client"),
+        (Some(bind), None) => {
+            if args.use_async {
+                run_async_server(&bind).await?
+            } else {
+                run_blocking_server(&bind)?;
+            }
         }
+        (_, _) => warn!("Must specify either --server or --client"),
     }
 
     Ok(())
