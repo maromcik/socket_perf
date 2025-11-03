@@ -64,7 +64,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 run_blocking_server(&bind)?;
             }
         }
-        (_, _) => warn!("Must specify either --server or --client"),
+        (_, _) => warn!("Must specify either --bind (-b) or --connect (-c)"),
     }
 
     Ok(())
