@@ -74,8 +74,8 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
         match t.join() {
             Ok(Ok(total_bytes)) => {
                 grand_total += total_bytes;
-                let mbps = (total_bytes as f64 * 8.0) / 1_000_000.0;
-                info!("Total bytes sent in this stream: {mbps} Mbps");
+                let mbps = (total_bytes as f64 * 8.0) / 1_000_000.0 / duration.as_secs_f64();
+                info!("Speed in this stream: {mbps} Mbps");
             }
             Ok(Err(e)) => {
                 error!("Thread Error: {e:?}");
@@ -85,8 +85,8 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
             }
         }
     };
-    let mbps = (grand_total as f64 * 8.0) / 1_000_000.0;
-    info!("Total bytes sent in all streams: {mbps} Mbps");
+    let mbps = (grand_total as f64 * 8.0) / 1_000_000.0 / duration.as_secs_f64();
+    info!("Total speed in all streams: {mbps} Mbps");
     Ok(())
 }
 
