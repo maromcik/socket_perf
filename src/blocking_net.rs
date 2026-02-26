@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Barrier};
 use std::thread;
 use std::time::Duration;
 use log::{error, info};
@@ -67,12 +67,14 @@ pub fn run_n_servers(ip: &str, start_port: usize, n: usize) -> Result<(), AppErr
 }
 
 pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_size: usize, changing_data: bool, duration: Duration, n: usize) -> Result<(), AppError> {
+    let barrier = Arc::new(Barrier::new(n));
     let (tx, rx) = mpsc::channel();
     for i in start_port..start_port+n {
         let addr = format!("{ip}:{i}");
         let tx = tx.clone();
+        let br = barrier.clone();
         thread::spawn(move || {
-            let res = run_blocking_client(addr.as_str(), packet_size, buffer_size, changing_data, duration);
+            let res = run_blocking_client(addr.as_str(), packet_size, buffer_size, changing_data, duration, br);
             if let Err(e) = tx.send(res) {
                 error!("Error sending result: {e:?}");
             }
@@ -102,7 +104,7 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
     Ok(())
 }
 
-pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, changing_data: bool, duration: Duration) -> Result<Stats, AppError> {
+pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, changing_data: bool, duration: Duration, barrier: Arc<Barrier>) -> Result<Stats, AppError> {
     let stream = TcpStream::connect(addr)?;
     stream.set_nodelay(true)?;
     info!("(blocking) Connected to {addr}");
@@ -118,10 +120,11 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
     let mut sent_bytes: u64 = 0;
     let mut total_bytes: u64 = 0;
     let mut total_packets: u64 = 0;
-    let mut last = std::time::Instant::now();
     let mut packet_count = 0_u64;
     let total_duration = std::time::Instant::now();
     let mut i = 0_u128;
+    barrier.wait();
+    let mut last = std::time::Instant::now();
     while total_duration.elapsed() <= duration {
         if changing_data {
             packet.extend(i.to_string().as_bytes());

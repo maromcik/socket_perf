@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use crate::async_net::{run_async_client, run_async_server};
 use crate::blocking_net::{run_n_clients, run_n_servers};
 use clap::{Parser};
@@ -65,6 +66,7 @@ async fn main() -> Result<(), AppError> {
             if args.use_async {
                 run_async_client(format!("{connect}:{}", args.port).as_str(), args.size, args.buffer, args.variable_data).await?;
             } else {
+                
                 run_n_clients(connect.as_str(), args.port as usize, args.size, args.buffer, args.variable_data, Duration::from_secs(args.duration), args.threads)?;
             }
         }
