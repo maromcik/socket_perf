@@ -140,8 +140,7 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
         }
         if last.elapsed().as_secs_f64() >= 1.0 {
             let mbps = calculate_mb(sent_bytes);
-            info!("(blocking) Sent {:.2} Mbps", mbps);
-            info!("(blocking) Sent {} packets", packet_count);
+            info!("(blocking) Sent {:.2} Mbps; {packet_count} packets", mbps);
             sent_bytes = 0;
             last = std::time::Instant::now();
             packet_count = 0;

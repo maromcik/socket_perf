@@ -87,8 +87,7 @@ pub async fn run_async_client(
 
         if last.elapsed().as_secs_f64() >= 1.0 {
             let mbps = (sent_bytes as f64 * 8.0) / 1_000_000.0;
-            info!("(async) Sent {:.2} Mbps", mbps);
-            info!("(async) Sent {} packets", packet_count);
+            info!("(async) Sent {:.2} Mbps; {packet_count} packets", mbps);
             sent_bytes = 0;
             last = tokio::time::Instant::now();
             packet_count = 0;
