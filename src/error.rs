@@ -4,7 +4,7 @@ use thiserror::Error;
 #[derive(Error, Debug, Clone, PartialEq, Eq)]
 pub enum AppError {
     #[error("I/O error {0}")]
-    IoError(String)
+    IoError(String),
 }
 
 impl From<std::io::Error> for AppError {

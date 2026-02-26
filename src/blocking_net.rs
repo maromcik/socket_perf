@@ -1,30 +1,40 @@
+use crate::config::{calculate_gb, calculate_mb, ClientConfig, ServerConfig, Stats};
+use crate::error::AppError;
+use log::{error, info};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::sync::{mpsc, Arc, Barrier};
+use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
-use std::time::Duration;
-use log::{error, info};
-use crate::error::AppError;
 
-pub struct Stats {
-    pub total_bytes: u64,
-    pub total_packets: u64,
+pub fn run_threaded_blocking_servers(config: &ServerConfig) -> Result<(), AppError> {
+    let mut threads = Vec::new();
+    for i in (config.port as usize)..config.port as usize + config.threads {
+        let addr = format!("{}:{i}", config.ip);
+        threads.push(thread::spawn(move || {
+            if let Err(e) = run_blocking_server(addr.as_str()) {
+                error!("Error for {addr}: {e:?}");
+            }
+        }));
+    }
+    for t in threads {
+        if let Err(e) = t.join() {
+            error!("Thread panicked: {e:?}");
+        }
+    }
+    Ok(())
 }
 
 pub fn run_blocking_server(addr: &str) -> Result<(), AppError> {
     let listener = TcpListener::bind(addr)?;
-    info!("(blocking) Server listening on {addr}");
-
+    info!("(blocking) Server listening on {}", addr);
 
     loop {
         let (stream, peer) = listener.accept()?;
         info!("Client connected: {peer}");
         thread::spawn(move || {
-            let _ = handle_connection(stream);    
+            let _ = handle_connection(stream);
         });
-        
     }
-
 }
 pub fn handle_connection(mut socket: TcpStream) -> Result<(), AppError> {
     let mut buf = vec![0u8; 1024 * 1024];
@@ -35,7 +45,7 @@ pub fn handle_connection(mut socket: TcpStream) -> Result<(), AppError> {
         let n = socket.read(&mut buf)?;
         if n == 0 {
             info!("Connection closed");
-            return Ok(())
+            return Ok(());
         }
         total_bytes += n as u64;
 
@@ -48,37 +58,19 @@ pub fn handle_connection(mut socket: TcpStream) -> Result<(), AppError> {
     }
 }
 
-pub fn run_n_servers(ip: &str, start_port: usize, n: usize) -> Result<(), AppError> {
-    let mut threads = Vec::new();
-    for i in start_port..start_port+n {
-        let addr = format!("{ip}:{i}");
-        threads.push(thread::spawn(move || {
-            if let Err(e) = run_blocking_server(addr.as_str()) {
-                error!("Error for {addr}: {e:?}");
-            }
-        }));
-    }
-    for t in threads {
-        if let Err(e) = t.join() {
-            error!("Thread panicked: {e:?}");
-        }
-    };
-    Ok(())
-}
-
-pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_size: usize, changing_data: bool, duration: Duration, n: usize) -> Result<(), AppError> {
-    let barrier = Arc::new(Barrier::new(n));
+pub fn run_threaded_blocking_clients(config: &ClientConfig) -> Result<(), AppError> {
+    let barrier = Arc::new(Barrier::new(config.threads));
     let (tx, rx) = mpsc::channel();
-    for i in start_port..start_port+n {
-        let addr = format!("{ip}:{i}");
+    for i in (config.port as usize)..config.port as usize + config.threads {
         let tx = tx.clone();
         let br = barrier.clone();
+        let mut c = config.clone();
+        c.set_port(i as u16);
         thread::spawn(move || {
-            let res = run_blocking_client(addr.as_str(), packet_size, buffer_size, changing_data, duration, br);
+            let res = run_blocking_client(c, br);
             if let Err(e) = tx.send(res) {
                 error!("Error sending result: {e:?}");
             }
-
         });
     }
     drop(tx);
@@ -89,8 +81,12 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
             Ok(stat) => {
                 grand_total_bytes += stat.total_bytes;
                 grand_total_packets += stat.total_packets;
-                let mbps = calculate_mb(stat.total_bytes) / duration.as_secs_f64();
-                info!("Stream speed: {:.2} Mbps; Stream packets: {:.2}", mbps, stat.total_packets as f64 / duration.as_secs_f64());
+                let mbps = calculate_mb(stat.total_bytes) / config.duration.as_secs_f64();
+                info!(
+                    "Stream speed: {:.2} Mbps; Stream packets: {:.2}",
+                    mbps,
+                    stat.total_packets as f64 / config.duration.as_secs_f64()
+                );
             }
             Err(e) => {
                 error!("Thread Error: {e:?}");
@@ -98,44 +94,51 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
         }
     }
 
-    let gbps = calculate_gb(grand_total_bytes) / duration.as_secs_f64();
+    let gbps = calculate_gb(grand_total_bytes) / config.duration.as_secs_f64();
     info!("Total speed in all streams: {:.3} Gbps", gbps);
-    info!("Total packet count in all streams: {:.2}", grand_total_packets as f64 / duration.as_secs_f64());
+    info!(
+        "Total packet count in all streams: {:.2}",
+        grand_total_packets as f64 / config.duration.as_secs_f64()
+    );
     Ok(())
 }
 
-pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, changing_data: bool, duration: Duration, barrier: Arc<Barrier>) -> Result<Stats, AppError> {
-    let stream = TcpStream::connect(addr)?;
+pub fn run_blocking_client(config: ClientConfig, barrier: Arc<Barrier>) -> Result<Stats, AppError> {
+    let addr = format!("{}:{}", config.ip, config.port);
+    let stream = TcpStream::connect(addr.as_str())?;
     stream.set_nodelay(true)?;
     info!("(blocking) Connected to {addr}");
-    
-    let mut writer: Box<dyn Write + Unpin + Send> = if buffer_size > 0 {
-        Box::new(std::io::BufWriter::with_capacity(buffer_size, stream))
+
+    let mut writer: Box<dyn Write + Unpin + Send> = if config.buffer_size > 0 {
+        Box::new(std::io::BufWriter::with_capacity(
+            config.buffer_size,
+            stream,
+        ))
     } else {
         Box::new(stream)
     };
-    
-    let mut packet = vec![0u8; packet_size];
+
+    let mut packet = vec![0u8; config.packet_size];
 
     let mut sent_bytes: u64 = 0;
     let mut total_bytes: u64 = 0;
     let mut total_packets: u64 = 0;
     let mut packet_count = 0_u64;
-    let total_duration = std::time::Instant::now();
     let mut i = 0_u128;
     barrier.wait();
+    let total_duration = std::time::Instant::now();
     let mut last = std::time::Instant::now();
-    while total_duration.elapsed() <= duration {
-        if changing_data {
+    while total_duration.elapsed() <= config.duration {
+        if config.changing_data {
             packet.extend(i.to_string().as_bytes());
             i += 1;
         }
         writer.write_all(&packet)?;
-        total_bytes += packet_size as u64;
-        sent_bytes += packet_size as u64;
+        total_bytes += config.packet_size as u64;
+        sent_bytes += config.packet_size as u64;
         total_packets += 1;
         packet_count += 1;
-        if buffer_size > 0 && sent_bytes % (buffer_size as u64) == 0 {
+        if config.buffer_size > 0 && sent_bytes % (config.buffer_size as u64) == 0 {
             writer.flush()?;
         }
         if last.elapsed().as_secs_f64() >= 1.0 {
@@ -146,8 +149,8 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
             packet_count = 0;
         }
 
-        if changing_data {
-            packet = vec![0u8; packet_size];
+        if config.changing_data {
+            packet = vec![0u8; config.packet_size];
         }
     }
     Ok(Stats {
@@ -156,10 +159,3 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
     })
 }
 
-pub fn calculate_mb(val: u64) -> f64 {
-    (val as f64 * 8.0) / 1_000_000.0
-}
-
-pub fn calculate_gb(val: u64) -> f64 {
-    (val as f64 * 8.0) / 1_000_000_000.0
-}
