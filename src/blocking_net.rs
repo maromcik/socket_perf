@@ -69,10 +69,13 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
             Ok(res)
         }));
     }
+    let mut grand_total: u128 = 0;
     for t in threads {
         match t.join() {
             Ok(Ok(total_bytes)) => {
-                info!("(blocking) Total bytes sent: {total_bytes}");
+                grand_total += total_bytes;
+                let mbps = (total_bytes as f64 * 8.0) / 1_000_000.0;
+                info!("Total bytes sent in this stream: {mbps} Mbps");
             }
             Ok(Err(e)) => {
                 error!("Thread Error: {e:?}");
@@ -82,6 +85,8 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
             }
         }
     };
+    let mbps = (grand_total as f64 * 8.0) / 1_000_000.0;
+    info!("Total bytes sent in all streams: {mbps} Mbps");
     Ok(())
 }
 
@@ -104,12 +109,13 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
     let mut packet_count = 0_u64;
     let total_duration = std::time::Instant::now();
     let mut i = 0_u128;
-    while total_duration.elapsed() < duration {
+    while total_duration.elapsed() <= duration {
         if changing_data {
             packet.extend(i.to_string().as_bytes());
             i += 1;
         }
         writer.write_all(&packet)?;
+        total_bytes += packet_size as u128;
         sent_bytes += packet_size as u64;
         packet_count += 1;
         if buffer_size > 0 && sent_bytes % (buffer_size as u64) == 0 {
@@ -119,7 +125,6 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
             let mbps = (sent_bytes as f64 * 8.0) / 1_000_000.0;
             info!("(blocking) Sent {:.2} Mbps", mbps);
             info!("(blocking) Sent {} packets", packet_count);
-            total_bytes += sent_bytes as u128;
             sent_bytes = 0;
             last = std::time::Instant::now();
             packet_count = 0;
