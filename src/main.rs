@@ -1,5 +1,5 @@
 use crate::async_net::{run_async_client, run_async_server};
-use crate::blocking_net::{run_blocking_client, run_blocking_server};
+use crate::blocking_net::{run_blocking_client, run_blocking_server, run_n_clients, run_n_servers};
 use clap::{Parser, arg};
 use std::error::Error;
 use log::warn;
@@ -42,6 +42,9 @@ struct Args {
 
     #[arg(short = 'a', long = "async", action = clap::ArgAction::SetTrue)]
     use_async: bool,
+
+    #[arg(short = 't', long = "threads", default_value = "1")]
+    threads: usize,
 }
 
 #[tokio::main]
@@ -57,14 +60,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
             if args.use_async {
                 run_async_client(format!("{connect}:{}", args.port).as_str(), args.size, args.buffer, args.changing_data).await?;
             } else {
-                run_blocking_client(format!("{connect}:{}", args.port).as_str(), args.size, args.buffer, args.changing_data)?;
+                run_n_clients(connect.as_str(), args.port as usize, args.size, args.buffer, args.changing_data, args.threads)?;
             }
         }
         (Some(bind), None) => {
             if args.use_async {
                 run_async_server(format!("{bind}:{}", args.port).as_str()).await?
             } else {
-                run_blocking_server(format!("{bind}:{}", args.port).as_str())?;
+                run_n_servers(bind.as_str(), args.port as usize, args.threads)?;
             }
         }
         (_, _) => warn!("Must specify either --bind (-b) or --connect (-c)"),

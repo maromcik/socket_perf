@@ -2,7 +2,7 @@ use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
-use log::info;
+use log::{error, info};
 
 pub fn run_blocking_server(addr: &str) -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(addr)?;
@@ -39,6 +39,34 @@ pub fn handle_connection(mut socket: TcpStream) -> Result<(), Box<dyn Error>> {
             last = std::time::Instant::now();
         }
     }
+}
+
+pub fn run_n_servers(ip: &str, start_port: usize, n: usize) -> Result<(), Box<dyn Error>> {
+    let mut threads = Vec::new();
+    for i in start_port..start_port+n {
+        let addr = format!("{ip}:{i}");
+        threads.push(thread::spawn(move || {
+            if let Err(e) = run_blocking_server(addr.as_str()) {
+                error!("Error for {addr}: {e:?}");
+            }
+        }));
+    }
+    threads.into_iter().for_each(|t| t.join().expect("Thread panicked"));
+    Ok(())
+}
+
+pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_size: usize, changing_data: bool, n: usize) -> Result<(), Box<dyn Error>> {
+    let mut threads = Vec::new();
+    for i in start_port..start_port+n {
+        let addr = format!("{ip}:{i}");
+        threads.push(thread::spawn(move || {
+            if let Err(e) = run_blocking_client(addr.as_str(), packet_size, buffer_size, changing_data) {
+                error!("Error for {addr}: {e:?}");
+            }
+        }));
+    }
+    threads.into_iter().for_each(|t| t.join().expect("Thread panicked"));
+    Ok(())
 }
 
 pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, changing_data: bool) -> Result<(), Box<dyn Error>> {
