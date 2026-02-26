@@ -88,7 +88,7 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
                 grand_total += stat.total_bytes;
                 grand_total_packets += stat.total_packets;
                 let mbps = calculate_mb(stat.total_packets) / duration.as_secs_f64();
-                info!("Stream speed: {mbps} Mbps; Stream packets: {}", stat.total_packets as f64 / duration.as_secs_f64());
+                info!("Stream speed: {:.2} Mbps; Stream packets: {:.2}", mbps, stat.total_packets as f64 / duration.as_secs_f64());
             }
             Err(e) => {
                 error!("Thread Error: {e:?}");
@@ -97,8 +97,8 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
     }
 
     let gbps = calculate_gb(grand_total) / duration.as_secs_f64();
-    info!("Total speed in all streams: {gbps} Gbps");
-    info!("Total packet count in all streams: {}", grand_total_packets as f64 / duration.as_secs_f64());
+    info!("Total speed in all streams: {:.3} Gbps", gbps);
+    info!("Total packet count in all streams: {:.2}", grand_total_packets as f64 / duration.as_secs_f64());
     Ok(())
 }
 
