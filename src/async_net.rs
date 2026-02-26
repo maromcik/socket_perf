@@ -50,7 +50,7 @@ pub async fn handle_connection(mut socket: TcpStream) {
 
 pub async fn run_async_clients(config: &ClientConfig) -> Result<(), AppError> {
     let barrier = Arc::new(tokio::sync::Barrier::new(config.threads));
-    let (tx, mut rx) = tokio::sync::mpsc::channel(config.threads*10);
+    let (tx, mut rx) = tokio::sync::mpsc::channel(config.threads+10);
     for _ in 0..config.threads {
         let tx = tx.clone();
         let br = barrier.clone();
