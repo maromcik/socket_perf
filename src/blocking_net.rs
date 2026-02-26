@@ -1,10 +1,11 @@
-use std::error::Error;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::thread;
+use std::time::Duration;
 use log::{error, info};
+use crate::error::AppError;
 
-pub fn run_blocking_server(addr: &str) -> Result<(), Box<dyn Error>> {
+pub fn run_blocking_server(addr: &str) -> Result<(), AppError> {
     let listener = TcpListener::bind(addr)?;
     info!("(blocking) Server listening on {addr}");
 
@@ -19,7 +20,7 @@ pub fn run_blocking_server(addr: &str) -> Result<(), Box<dyn Error>> {
     }
 
 }
-pub fn handle_connection(mut socket: TcpStream) -> Result<(), Box<dyn Error>> {
+pub fn handle_connection(mut socket: TcpStream) -> Result<(), AppError> {
     let mut buf = vec![0u8; 1024 * 1024];
     let mut total_bytes: u64 = 0;
     let mut last = std::time::Instant::now();
@@ -41,7 +42,7 @@ pub fn handle_connection(mut socket: TcpStream) -> Result<(), Box<dyn Error>> {
     }
 }
 
-pub fn run_n_servers(ip: &str, start_port: usize, n: usize) -> Result<(), Box<dyn Error>> {
+pub fn run_n_servers(ip: &str, start_port: usize, n: usize) -> Result<(), AppError> {
     let mut threads = Vec::new();
     for i in start_port..start_port+n {
         let addr = format!("{ip}:{i}");
@@ -51,25 +52,40 @@ pub fn run_n_servers(ip: &str, start_port: usize, n: usize) -> Result<(), Box<dy
             }
         }));
     }
-    threads.into_iter().for_each(|t| t.join().expect("Thread panicked"));
+    for t in threads {
+        if let Err(e) = t.join() {
+            error!("Thread panicked: {e:?}");
+        }
+    };
     Ok(())
 }
 
-pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_size: usize, changing_data: bool, n: usize) -> Result<(), Box<dyn Error>> {
-    let mut threads = Vec::new();
+pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_size: usize, changing_data: bool, duration: Duration, n: usize) -> Result<(), AppError> {
+    let mut threads: Vec<thread::JoinHandle<Result<u128, AppError>>> = Vec::new();
     for i in start_port..start_port+n {
         let addr = format!("{ip}:{i}");
         threads.push(thread::spawn(move || {
-            if let Err(e) = run_blocking_client(addr.as_str(), packet_size, buffer_size, changing_data) {
-                error!("Error for {addr}: {e:?}");
-            }
+            let res = run_blocking_client(addr.as_str(), packet_size, buffer_size, changing_data, duration)?;
+            Ok(res)
         }));
     }
-    threads.into_iter().for_each(|t| t.join().expect("Thread panicked"));
+    for t in threads {
+        match t.join() {
+            Ok(Ok(total_bytes)) => {
+                info!("(blocking) Total bytes sent: {total_bytes}");
+            }
+            Ok(Err(e)) => {
+                error!("Thread Error: {e:?}");
+            }
+            Err(e) => {
+                error!("Thread Join panicked: {e:?}");
+            }
+        }
+    };
     Ok(())
 }
 
-pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, changing_data: bool) -> Result<(), Box<dyn Error>> {
+pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, changing_data: bool, duration: Duration) -> Result<u128, AppError> {
     let stream = TcpStream::connect(addr)?;
     stream.set_nodelay(true)?;
     info!("(blocking) Connected to {addr}");
@@ -83,10 +99,12 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
     let mut packet = vec![0u8; packet_size];
 
     let mut sent_bytes: u64 = 0;
+    let mut total_bytes: u128 = 0;
     let mut last = std::time::Instant::now();
     let mut packet_count = 0_u64;
+    let total_duration = std::time::Instant::now();
     let mut i = 0_u128;
-    loop {
+    while total_duration.elapsed() < duration {
         if changing_data {
             packet.extend(i.to_string().as_bytes());
             i += 1;
@@ -101,6 +119,7 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
             let mbps = (sent_bytes as f64 * 8.0) / 1_000_000.0;
             info!("(blocking) Sent {:.2} Mbps", mbps);
             info!("(blocking) Sent {} packets", packet_count);
+            total_bytes += sent_bytes as u128;
             sent_bytes = 0;
             last = std::time::Instant::now();
             packet_count = 0;
@@ -110,4 +129,5 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
             packet = vec![0u8; packet_size];
         }
     }
+    Ok(total_bytes)
 }

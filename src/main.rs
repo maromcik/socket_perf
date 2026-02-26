@@ -1,11 +1,13 @@
 use crate::async_net::{run_async_client, run_async_server};
-use crate::blocking_net::{run_blocking_client, run_blocking_server, run_n_clients, run_n_servers};
-use clap::{Parser, arg};
-use std::error::Error;
+use crate::blocking_net::{run_n_clients, run_n_servers};
+use clap::{Parser};
+use std::time::Duration;
 use log::warn;
+use crate::error::AppError;
 
 mod async_net;
 mod blocking_net;
+mod error;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -37,18 +39,21 @@ struct Args {
     #[arg(short = 'c', long = "connect")]
     connect: Option<String>,
 
-    #[arg(short = 'd', long = "changing_data", action = clap::ArgAction::SetTrue)]
-    changing_data: bool,
+    #[arg(short = 'v', long = "changing_data", action = clap::ArgAction::SetTrue)]
+    variable_data: bool,
 
     #[arg(short = 'a', long = "async", action = clap::ArgAction::SetTrue)]
     use_async: bool,
 
     #[arg(short = 't', long = "threads", default_value = "1")]
     threads: usize,
+
+    #[arg(short = 'd', long = "duration", default_value = "10")]
+    duration: u64,
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), AppError> {
     let args = Args::parse();
 
     env_logger::Builder::new()
@@ -58,9 +63,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     match (args.bind, args.connect) {
         (None, Some(connect)) => {
             if args.use_async {
-                run_async_client(format!("{connect}:{}", args.port).as_str(), args.size, args.buffer, args.changing_data).await?;
+                run_async_client(format!("{connect}:{}", args.port).as_str(), args.size, args.buffer, args.variable_data).await?;
             } else {
-                run_n_clients(connect.as_str(), args.port as usize, args.size, args.buffer, args.changing_data, args.threads)?;
+                run_n_clients(connect.as_str(), args.port as usize, args.size, args.buffer, args.variable_data, Duration::from_secs(args.duration), args.threads)?;
             }
         }
         (Some(bind), None) => {

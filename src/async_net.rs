@@ -1,11 +1,11 @@
 use tokio::net::TcpListener;
 use tokio::io::{AsyncReadExt, AsyncWrite, BufWriter};
-use std::error::Error;
 use log::{error, info};
 use tokio::net::TcpStream;
 use tokio::io::AsyncWriteExt;
+use crate::error::AppError;
 
-pub async fn run_async_server(addr: &str) -> Result<(), Box<dyn Error>> {
+pub async fn run_async_server(addr: &str) -> Result<(), AppError> {
     let listener = TcpListener::bind(addr).await?;
     info!("(async) Server listening on {addr}");
 
@@ -56,7 +56,7 @@ pub async fn run_async_client(
     packet_size: usize,
     buffer_size: usize,
     changing_data: bool,
-) -> Result<(), Box<dyn Error>> {
+) -> Result<(), AppError> {
     let stream = TcpStream::connect(addr).await?;
     stream.set_nodelay(true)?;
     info!("Connected to server {addr}");
