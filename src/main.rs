@@ -1,5 +1,5 @@
-use crate::async_net::{run_async_clients, run_async_servers};
-use crate::blocking_net::{run_threaded_blocking_clients, run_threaded_blocking_servers};
+use crate::async_net::{run_async_clients, run_async_server};
+use crate::blocking_net::{run_blocking_server, run_threaded_blocking_clients};
 use crate::config::{Args, ClientConfig, ServerConfig};
 use crate::error::AppError;
 use clap::Parser;
@@ -40,12 +40,11 @@ async fn main() -> Result<(), AppError> {
             let config = ServerConfig {
                 ip: bind,
                 port: args.port,
-                threads: args.threads,
             };
             if args.use_async {
-                run_async_servers(&config).await?
+                run_async_server(&config).await?
             } else {
-                run_threaded_blocking_servers(&config)?;
+                run_blocking_server(&config)?;
             }
         }
         (_, _) => warn!("Must specify either --bind (-b) or --connect (-c)"),

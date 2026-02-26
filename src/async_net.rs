@@ -8,27 +8,9 @@ use tokio::net::TcpStream;
 use tokio::task;
 use crate::config::{calculate_gb, calculate_mb, ClientConfig, ServerConfig, Stats};
 
-pub async fn run_async_servers(config: &ServerConfig) -> Result<(), AppError> {
-    let mut tasks = Vec::new();
-    for i in (config.port as usize)..config.port as usize + config.threads {
-        let addr = format!("{}:{i}", config.ip);
-        tasks.push(task::spawn(async move {
-            if let Err(e) = run_async_server(addr.as_str()).await {
-                error!("Error for {addr}: {e:?}");
-            }
-        }));
-    }
-    for t in tasks {
-        if let Err(e) = t.await {
-            error!("Thread panicked: {e:?}");
-        }
-    }
-    Ok(())
-}
-
-
-pub async fn run_async_server(addr: &str) -> Result<(), AppError> {
-    let listener = TcpListener::bind(addr).await?;
+pub async fn run_async_server(config: &ServerConfig) -> Result<(), AppError> {
+    let addr = format!("{}:{}", config.ip, config.port);
+    let listener = TcpListener::bind(addr.as_str()).await?;
     info!("(async) Server listening on {addr}");
 
     loop {
@@ -57,7 +39,6 @@ pub async fn handle_connection(mut socket: TcpStream) {
 
         total_bytes += n as u64;
 
-        // print throughput every second
         if last.elapsed().as_secs_f64() >= 1.0 {
             let mbps = (total_bytes as f64 * 8.0) / 1_000_000.0;
             info!("Received {:.2} Mbps", mbps);
@@ -70,11 +51,10 @@ pub async fn handle_connection(mut socket: TcpStream) {
 pub async fn run_async_clients(config: &ClientConfig) -> Result<(), AppError> {
     let barrier = Arc::new(tokio::sync::Barrier::new(config.threads));
     let (tx, mut rx) = tokio::sync::mpsc::channel(config.threads*10);
-    for i in (config.port as usize)..config.port as usize + config.threads {
+    for _ in 0..config.threads {
         let tx = tx.clone();
         let br = barrier.clone();
-        let mut c = config.clone();
-        c.set_port(i as u16);
+        let c = config.clone();
         task::spawn(async move {
             let res = run_async_client(c, br).await;
             if let Err(e) = tx.send(res).await {

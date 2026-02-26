@@ -58,17 +58,10 @@ pub struct ClientConfig {
     pub duration: std::time::Duration,
 }
 
-impl ClientConfig {
-    pub fn set_port(&mut self, port: u16) {
-        self.port = port;
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub ip: IpAddr,
     pub port: u16,
-    pub threads: usize,
 }
 
 pub fn calculate_mb(val: u64) -> f64 {

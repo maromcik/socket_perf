@@ -6,26 +6,9 @@ use std::net::{TcpListener, TcpStream};
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 
-pub fn run_threaded_blocking_servers(config: &ServerConfig) -> Result<(), AppError> {
-    let mut threads = Vec::new();
-    for i in (config.port as usize)..config.port as usize + config.threads {
-        let addr = format!("{}:{i}", config.ip);
-        threads.push(thread::spawn(move || {
-            if let Err(e) = run_blocking_server(addr.as_str()) {
-                error!("Error for {addr}: {e:?}");
-            }
-        }));
-    }
-    for t in threads {
-        if let Err(e) = t.join() {
-            error!("Thread panicked: {e:?}");
-        }
-    }
-    Ok(())
-}
-
-pub fn run_blocking_server(addr: &str) -> Result<(), AppError> {
-    let listener = TcpListener::bind(addr)?;
+pub fn run_blocking_server(config: &ServerConfig) -> Result<(), AppError> {
+    let addr = format!("{}:{}", config.ip, config.port);
+    let listener = TcpListener::bind(addr.as_str())?;
     info!("(blocking) Server listening on {}", addr);
 
     loop {
@@ -61,11 +44,10 @@ pub fn handle_connection(mut socket: TcpStream) -> Result<(), AppError> {
 pub fn run_threaded_blocking_clients(config: &ClientConfig) -> Result<(), AppError> {
     let barrier = Arc::new(Barrier::new(config.threads));
     let (tx, rx) = mpsc::channel();
-    for i in (config.port as usize)..config.port as usize + config.threads {
+    for _ in 0..config.threads {
         let tx = tx.clone();
         let br = barrier.clone();
-        let mut c = config.clone();
-        c.set_port(i as u16);
+        let c = config.clone();
         thread::spawn(move || {
             let res = run_blocking_client(c, br);
             if let Err(e) = tx.send(res) {
