@@ -6,6 +6,11 @@ use std::time::Duration;
 use log::{error, info};
 use crate::error::AppError;
 
+pub struct Stats {
+    pub total_bytes: u64,
+    pub total_packets: u64,
+}
+
 pub fn run_blocking_server(addr: &str) -> Result<(), AppError> {
     let listener = TcpListener::bind(addr)?;
     info!("(blocking) Server listening on {addr}");
@@ -76,13 +81,14 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
     }
     drop(tx);
     let mut grand_total: u64 = 0;
+    let mut grand_total_packets: u64 = 0;
     for received in rx {
         match received {
-            Ok(total_bytes) => {
-                grand_total += total_bytes;
-
-                let mbps = calculate_mb(total_bytes) / duration.as_secs_f64();
-                info!("Speed in this stream: {mbps} Mbps");
+            Ok(stat) => {
+                grand_total += stat.total_bytes;
+                grand_total_packets += stat.total_packets;
+                let mbps = calculate_mb(stat.total_packets) / duration.as_secs_f64();
+                info!("Stream speed: {mbps} Mbps; Stream packets: {}", stat.total_packets);
             }
             Err(e) => {
                 error!("Thread Error: {e:?}");
@@ -92,10 +98,11 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
 
     let gbps = calculate_gb(grand_total) / duration.as_secs_f64();
     info!("Total speed in all streams: {gbps} Gbps");
+    info!("Total packet count in all streams: {grand_total_packets}");
     Ok(())
 }
 
-pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, changing_data: bool, duration: Duration) -> Result<u64, AppError> {
+pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, changing_data: bool, duration: Duration) -> Result<Stats, AppError> {
     let stream = TcpStream::connect(addr)?;
     stream.set_nodelay(true)?;
     info!("(blocking) Connected to {addr}");
@@ -110,6 +117,7 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
 
     let mut sent_bytes: u64 = 0;
     let mut total_bytes: u64 = 0;
+    let mut total_packets: u64 = 0;
     let mut last = std::time::Instant::now();
     let mut packet_count = 0_u64;
     let total_duration = std::time::Instant::now();
@@ -122,6 +130,7 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
         writer.write_all(&packet)?;
         total_bytes += packet_size as u64;
         sent_bytes += packet_size as u64;
+        total_packets += 1;
         packet_count += 1;
         if buffer_size > 0 && sent_bytes % (buffer_size as u64) == 0 {
             writer.flush()?;
@@ -139,7 +148,10 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
             packet = vec![0u8; packet_size];
         }
     }
-    Ok(total_bytes)
+    Ok(Stats {
+        total_bytes,
+        total_packets,
+    })
 }
 
 pub fn calculate_mb(val: u64) -> f64 {
