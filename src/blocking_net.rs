@@ -90,8 +90,8 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
         }
     }
 
-    let mbps = calculate_mb(grand_total) / duration.as_secs_f64();
-    info!("Total speed in all streams: {mbps} Mbps");
+    let gbps = calculate_gb(grand_total) / duration.as_secs_f64();
+    info!("Total speed in all streams: {gbps} Gbps");
     Ok(())
 }
 
@@ -144,4 +144,8 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
 
 pub fn calculate_mb(val: u64) -> f64 {
     (val as f64 * 8.0) / 1_000_000.0
+}
+
+pub fn calculate_gb(val: u64) -> f64 {
+    (val as f64 * 8.0) / 1_000_000_000.0
 }
