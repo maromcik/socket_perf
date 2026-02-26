@@ -127,8 +127,18 @@ pub fn run_blocking_client(config: ClientConfig, barrier: Arc<Barrier>) -> Resul
     let mut i = 0_u128;
     barrier.wait();
     let total_duration = std::time::Instant::now();
+    barrier.wait();
     let mut last = std::time::Instant::now();
     while total_duration.elapsed() <= config.duration {
+        if last.elapsed().as_secs_f64() >= 1.0 {
+            let mbps = calculate_mb(sent_bytes);
+            info!("(blocking) Sent {:.2} Mbps; {packet_count} packets", mbps);
+            sent_bytes = 0;
+            packet_count = 0;
+            last = std::time::Instant::now();
+
+        }
+
         if config.changing_data {
             packet.extend(i.to_string().as_bytes());
             i += 1;
@@ -138,15 +148,8 @@ pub fn run_blocking_client(config: ClientConfig, barrier: Arc<Barrier>) -> Resul
         sent_bytes += config.packet_size as u64;
         total_packets += 1;
         packet_count += 1;
-        if config.buffer_size > 0 && sent_bytes % (config.buffer_size as u64) == 0 {
+        if config.buffer_size > 0 && sent_bytes.is_multiple_of(config.buffer_size as u64) {
             writer.flush()?;
-        }
-        if last.elapsed().as_secs_f64() >= 1.0 {
-            let mbps = calculate_mb(sent_bytes);
-            info!("(blocking) Sent {:.2} Mbps; {packet_count} packets", mbps);
-            sent_bytes = 0;
-            last = std::time::Instant::now();
-            packet_count = 0;
         }
 
         if config.changing_data {

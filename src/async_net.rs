@@ -135,6 +135,7 @@ pub async fn run_async_client(
     let mut i = 0_u128;
     barrier.wait().await;
     let total_duration = tokio::time::Instant::now();
+    barrier.wait().await;
     let mut last = tokio::time::Instant::now();
     while total_duration.elapsed() <= config.duration {
         if config.changing_data {
@@ -147,7 +148,7 @@ pub async fn run_async_client(
         packet_count += 1;
         total_packets += 1;
 
-        if config.buffer_size > 0 && sent_bytes % (config.buffer_size as u64) == 0 {
+        if config.buffer_size > 0 && sent_bytes.is_multiple_of(config.buffer_size as u64) {
             writer.flush().await?;
         }
 
