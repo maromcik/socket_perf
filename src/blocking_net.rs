@@ -1,5 +1,6 @@
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use log::{error, info};
@@ -61,36 +62,40 @@ pub fn run_n_servers(ip: &str, start_port: usize, n: usize) -> Result<(), AppErr
 }
 
 pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_size: usize, changing_data: bool, duration: Duration, n: usize) -> Result<(), AppError> {
-    let mut threads: Vec<thread::JoinHandle<Result<u128, AppError>>> = Vec::new();
+    let (tx, rx) = mpsc::channel();
     for i in start_port..start_port+n {
         let addr = format!("{ip}:{i}");
-        threads.push(thread::spawn(move || {
-            let res = run_blocking_client(addr.as_str(), packet_size, buffer_size, changing_data, duration)?;
-            Ok(res)
-        }));
+        let tx = tx.clone();
+        thread::spawn(move || {
+            let res = run_blocking_client(addr.as_str(), packet_size, buffer_size, changing_data, duration);
+            if let Err(e) = tx.send(res) {
+                error!("Error sending result: {e:?}");
+            }
+
+        });
     }
-    let mut grand_total: u128 = 0;
-    for t in threads {
-        match t.join() {
-            Ok(Ok(total_bytes)) => {
+    drop(tx);
+    let mut grand_total: u64 = 0;
+    for received in rx {
+        match received {
+            Ok(total_bytes) => {
                 grand_total += total_bytes;
-                let mbps = (total_bytes as f64 * 8.0) / 1_000_000.0 / duration.as_secs_f64();
+
+                let mbps = calculate_mb(total_bytes) / duration.as_secs_f64();
                 info!("Speed in this stream: {mbps} Mbps");
             }
-            Ok(Err(e)) => {
+            Err(e) => {
                 error!("Thread Error: {e:?}");
             }
-            Err(e) => {
-                error!("Thread Join panicked: {e:?}");
-            }
         }
-    };
-    let mbps = (grand_total as f64 * 8.0) / 1_000_000.0 / duration.as_secs_f64();
+    }
+
+    let mbps = calculate_mb(grand_total) / duration.as_secs_f64();
     info!("Total speed in all streams: {mbps} Mbps");
     Ok(())
 }
 
-pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, changing_data: bool, duration: Duration) -> Result<u128, AppError> {
+pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, changing_data: bool, duration: Duration) -> Result<u64, AppError> {
     let stream = TcpStream::connect(addr)?;
     stream.set_nodelay(true)?;
     info!("(blocking) Connected to {addr}");
@@ -104,7 +109,7 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
     let mut packet = vec![0u8; packet_size];
 
     let mut sent_bytes: u64 = 0;
-    let mut total_bytes: u128 = 0;
+    let mut total_bytes: u64 = 0;
     let mut last = std::time::Instant::now();
     let mut packet_count = 0_u64;
     let total_duration = std::time::Instant::now();
@@ -115,14 +120,14 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
             i += 1;
         }
         writer.write_all(&packet)?;
-        total_bytes += packet_size as u128;
+        total_bytes += packet_size as u64;
         sent_bytes += packet_size as u64;
         packet_count += 1;
         if buffer_size > 0 && sent_bytes % (buffer_size as u64) == 0 {
             writer.flush()?;
         }
         if last.elapsed().as_secs_f64() >= 1.0 {
-            let mbps = (sent_bytes as f64 * 8.0) / 1_000_000.0;
+            let mbps = calculate_mb(sent_bytes);
             info!("(blocking) Sent {:.2} Mbps", mbps);
             info!("(blocking) Sent {} packets", packet_count);
             sent_bytes = 0;
@@ -135,4 +140,8 @@ pub fn run_blocking_client(addr: &str, packet_size: usize, buffer_size: usize, c
         }
     }
     Ok(total_bytes)
+}
+
+pub fn calculate_mb(val: u64) -> f64 {
+    (val as f64 * 8.0) / 1_000_000.0
 }
