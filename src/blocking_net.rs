@@ -80,14 +80,14 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
         });
     }
     drop(tx);
-    let mut grand_total: u64 = 0;
+    let mut grand_total_bytes: u64 = 0;
     let mut grand_total_packets: u64 = 0;
     for received in rx {
         match received {
             Ok(stat) => {
-                grand_total += stat.total_bytes;
+                grand_total_bytes += stat.total_bytes;
                 grand_total_packets += stat.total_packets;
-                let mbps = calculate_mb(stat.total_packets) / duration.as_secs_f64();
+                let mbps = calculate_mb(stat.total_bytes) / duration.as_secs_f64();
                 info!("Stream speed: {:.2} Mbps; Stream packets: {:.2}", mbps, stat.total_packets as f64 / duration.as_secs_f64());
             }
             Err(e) => {
@@ -96,7 +96,7 @@ pub fn run_n_clients(ip: &str, start_port: usize, packet_size: usize, buffer_siz
         }
     }
 
-    let gbps = calculate_gb(grand_total) / duration.as_secs_f64();
+    let gbps = calculate_gb(grand_total_bytes) / duration.as_secs_f64();
     info!("Total speed in all streams: {:.3} Gbps", gbps);
     info!("Total packet count in all streams: {:.2}", grand_total_packets as f64 / duration.as_secs_f64());
     Ok(())
