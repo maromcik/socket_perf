@@ -26,7 +26,7 @@ async fn main() -> Result<(), AppError> {
                 port: args.port,
                 threads: args.threads,
                 packet_size: args.size,
-                buffer_size: args.buffer,
+                buffer_size: args.client_buffer,
                 changing_data: args.variable_data,
                 duration: Duration::from_secs(args.duration),
             };
@@ -40,6 +40,7 @@ async fn main() -> Result<(), AppError> {
             let config = ServerConfig {
                 ip: bind,
                 port: args.port,
+                buffer_size: args.server_buffer,
             };
             if args.use_async {
                 run_async_server(&config).await?

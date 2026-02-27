@@ -7,8 +7,11 @@ pub struct Args {
     #[arg(short = 's', long, default_value = "1500")]
     pub size: usize,
 
-    #[arg(short = 'f', long = "buffer", default_value = "0")]
-    pub buffer: usize,
+    #[arg(short = 'f', default_value = "0")]
+    pub client_buffer: usize,
+
+    #[arg(short = 'e', default_value = "67108864")]
+    pub server_buffer: usize,
 
     #[arg(short = 'p', long = "port", default_value = "3003")]
     pub port: u16,
@@ -62,6 +65,7 @@ pub struct ClientConfig {
 pub struct ServerConfig {
     pub ip: IpAddr,
     pub port: u16,
+    pub buffer_size: usize,
 }
 
 pub fn calculate_mb(val: u64) -> f64 {

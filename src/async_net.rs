@@ -16,12 +16,13 @@ pub async fn run_async_server(config: &ServerConfig) -> Result<(), AppError> {
     loop {
         let (socket, peer) = listener.accept().await?;
         info!("Client connected: {peer:?}");
-        tokio::spawn(async move { handle_connection(socket).await });
+        let buffer = config.buffer_size;
+        tokio::spawn(async move { handle_connection(socket, buffer).await });
     }
 }
 
-pub async fn handle_connection(mut socket: TcpStream) {
-    let mut buf = vec![0u8; 1024 * 1024]; // 64 KB read buffer
+pub async fn handle_connection(mut socket: TcpStream, buffer: usize) {
+    let mut buf = vec![0u8; buffer]; // 64 KB read buffer
     let mut total_bytes: u64 = 0;
     let mut last = tokio::time::Instant::now();
     loop {
